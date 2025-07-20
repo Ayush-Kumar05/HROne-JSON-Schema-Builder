@@ -12,6 +12,8 @@ export interface SchemaField {
   type: string;
   value: any;
   required?: boolean;
+  children?: SchemaField[];
+  parentId?: string;
 }
 
 const DATA_TYPES = [
@@ -34,18 +36,19 @@ export const JsonSchemaBuilder: React.FC = () => {
   ]);
   const { toast } = useToast();
 
-  const addField = () => {
+  const addField = (parentId?: string) => {
     const newField: SchemaField = {
       id: Date.now().toString(),
       name: '',
       type: 'string',
       value: '',
+      parentId,
     };
     setFields([...fields, newField]);
   };
 
   const removeField = (id: string) => {
-    setFields(fields.filter(field => field.id !== id));
+    setFields(fields.filter(field => field.id !== id && field.parentId !== id));
   };
 
   const updateField = (id: string, updates: Partial<SchemaField>) => {
@@ -54,14 +57,34 @@ export const JsonSchemaBuilder: React.FC = () => {
     ));
   };
 
+  const getAllFields = (): SchemaField[] => {
+    const buildTree = (parentId?: string): SchemaField[] => {
+      return fields
+        .filter(field => field.parentId === parentId)
+        .map(field => ({
+          ...field,
+          children: buildTree(field.id)
+        }));
+    };
+    return buildTree();
+  };
+
   const generateJson = () => {
-    const json: any = {};
-    fields.forEach(field => {
-      if (field.name) {
-        json[field.name] = field.value || getDefaultValue(field.type);
-      }
-    });
-    return json;
+    const buildJsonFromFields = (fieldList: SchemaField[]): any => {
+      const json: any = {};
+      fieldList.forEach(field => {
+        if (field.name) {
+          if (field.type === 'object' && field.children && field.children.length > 0) {
+            json[field.name] = buildJsonFromFields(field.children);
+          } else {
+            json[field.name] = field.value || getDefaultValue(field.type);
+          }
+        }
+      });
+      return json;
+    };
+    
+    return buildJsonFromFields(getAllFields());
   };
 
   const getDefaultValue = (type: string) => {
@@ -159,6 +182,86 @@ export const JsonSchemaBuilder: React.FC = () => {
     }
   };
 
+  const renderFields = (fieldList: SchemaField[], depth = 0): React.ReactNode => {
+    return fieldList.map((field) => (
+      <div key={field.id} className="space-y-3">
+        <div 
+          className="p-4 bg-field-bg border border-field-border rounded-lg"
+          style={{ marginLeft: `${depth * 20}px` }}
+        >
+          <div className="grid grid-cols-12 gap-3 items-start">
+            <div className="col-span-4">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Field name
+              </label>
+              <Input
+                placeholder="e.g., user_name, age"
+                value={field.name}
+                onChange={(e) => updateField(field.id, { name: e.target.value })}
+                className="bg-field-bg border-field-border text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Type
+              </label>
+              <Select
+                value={field.type}
+                onValueChange={(value) => updateField(field.id, { type: value, value: getDefaultValue(value) })}
+              >
+                <SelectTrigger className="bg-field-bg border-field-border text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DATA_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-4">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Value
+              </label>
+              {field.type === 'object' ? (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addField(field.id)}
+                    className="text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add Nested
+                  </Button>
+                </div>
+              ) : (
+                renderValueInput(field)
+              )}
+            </div>
+            <div className="col-span-2 pt-6 flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => removeField(field.id)}
+                className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        {field.children && field.children.length > 0 && (
+          <div className="space-y-3">
+            {renderFields(field.children, depth + 1)}
+          </div>
+        )}
+      </div>
+    ));
+  };
+
   const copyJson = () => {
     const json = generateJson();
     navigator.clipboard.writeText(JSON.stringify(json, null, 2));
@@ -229,65 +332,13 @@ export const JsonSchemaBuilder: React.FC = () => {
                 <span>📝</span>
                 Schema Builder
               </CardTitle>
-              <Button onClick={addField} size="sm" className="bg-primary hover:bg-primary/90">
+              <Button onClick={() => addField()} size="sm" className="bg-primary hover:bg-primary/90">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Field
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {fields.map((field) => (
-                <div key={field.id} className="p-4 bg-field-bg border border-field-border rounded-lg">
-                  <div className="grid grid-cols-12 gap-3 items-start">
-                    <div className="col-span-4">
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Field name
-                      </label>
-                      <Input
-                        placeholder="e.g., user_name, age"
-                        value={field.name}
-                        onChange={(e) => updateField(field.id, { name: e.target.value })}
-                        className="bg-field-bg border-field-border text-sm"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Type
-                      </label>
-                      <Select
-                        value={field.type}
-                        onValueChange={(value) => updateField(field.id, { type: value, value: getDefaultValue(value) })}
-                      >
-                        <SelectTrigger className="bg-field-bg border-field-border text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DATA_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-5">
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Value
-                      </label>
-                      {renderValueInput(field)}
-                    </div>
-                    <div className="col-span-1 pt-6">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeField(field.id)}
-                        className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {renderFields(getAllFields())}
             </CardContent>
           </Card>
 
