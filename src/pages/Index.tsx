@@ -1,7 +1,7 @@
-import SchemaBuilder from '@/components/schema-builder/SchemaBuilder';
+import { JsonSchemaBuilder } from "@/components/JsonSchemaBuilder";
 
 const Index = () => {
-  return <SchemaBuilder />;
+  return <JsonSchemaBuilder/>;
 };
 
 export default Index;
