@@ -21,7 +21,7 @@ const DATA_TYPES = [
   { value: 'number', label: 'Number' },
   { value: 'boolean', label: 'Boolean' },
   { value: 'array', label: 'Array' },
-  { value: 'object', label: 'Object' },
+  { value: 'object', label: 'Nested' },
   { value: 'objectId', label: 'ObjectId' },
   { value: 'date', label: 'Date' },
   { value: 'email', label: 'Email' },
